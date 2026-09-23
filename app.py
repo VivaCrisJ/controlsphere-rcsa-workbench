@@ -169,13 +169,15 @@ if page == "Overview":
     priorities = []
     if gaps:
         priorities.append(f'**Confirm coverage:** {", ".join(r["id"] for r in gaps)} has no active mapped control. Ask the process owner whether the gap is real.')
+    if outside:
+        priorities.append(f'**Act on residual exposure:** {outside} submitted assessment(s) exceed illustrative appetite; review the proposed actions and owners.')
     if quality_flags:
         priorities.append(f'**Improve documentation:** {len(quality_flags)} active records have completeness prompts; {missing_owner} lack a named owner.')
     if rationalisation:
         priorities.append(f'**Challenge inventory quality:** {len(rationalisation)} duplicate-text or overdue-review signals need a documented disposition.')
     if len(assessments) < len(state["risks"]):
         priorities.append(f'**Complete assessments:** {len(state["risks"]) - len(assessments)} risks have no RCSA submission; the outside-appetite count is therefore incomplete.')
-    for item in priorities[:4]:
+    for item in priorities[:5]:
         st.markdown(f"- {item}")
     st.caption("This view derives from the current session's records and links. It does not infer incidents, test results or a production control opinion.")
 
