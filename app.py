@@ -18,6 +18,8 @@ st.markdown("""<style>
 .block-container {max-width: 1300px; padding-top: 2rem}
 [data-testid="stMetricValue"] {font-size: 1.75rem}
 .smallnote {color: #57677a; font-size: .9rem}
+[data-testid="stBaseButton-primary"] {background-color: #245a84 !important; border-color: #245a84 !important}
+[data-testid="stBaseButton-primary"]:hover {background-color: #174663 !important; border-color: #174663 !important}
 </style>""", unsafe_allow_html=True)
 st.title("◉ ControlSphere")
 st.caption("A fictional benchmark operations workbench · control framework · rationalisation · RCSA")
@@ -66,17 +68,17 @@ if page == "Overview":
     rationalisation = [x for x in rationalisation_candidates(state) if x["kind"] in ("Potential duplicate", "Overdue review")]
     assessments = state["assessments"]
     lenses = [
-        ("inventory", "Active controls", str(len(active))),
-        ("quality", "Documentation gaps", str(len(quality_flags))),
-        ("rationalise", "Rationalisation signals", str(len(rationalisation))),
-        ("coverage", "Uncovered risks", str(len(gaps))),
-        ("rcsa", "RCSA completed", f'{len(assessments)}/{len(state["risks"])}'),
+        ("inventory", "Active controls", str(len(active)), "Active controls in the inventory; choose a process to inspect their distribution."),
+        ("quality", "Documentation", str(len(quality_flags)), "Active control records with documentation or mapping prompts."),
+        ("rationalise", "Rationalisation", str(len(rationalisation)), "Potential duplicate controls and overdue inventory reviews needing a human decision."),
+        ("coverage", "Coverage gaps", str(len(gaps)), "Risks without an active mapped control; coverage must be verified by an owner."),
+        ("rcsa", "RCSA progress", f'{len(assessments)}/{len(state["risks"])}', "Risks with an RCSA submission out of all risks in the sample."),
     ]
     if "overview_focus" not in st.session_state:
         st.session_state.overview_focus = "inventory"
-    for col, (lens, title, value) in zip(st.columns(5), lenses):
+    for col, (lens, title, value, explanation) in zip(st.columns(5), lenses):
         with col:
-            if st.button(f"{value} · {title}", key=f"focus_{lens}", type="primary" if st.session_state.overview_focus == lens else "secondary", width="stretch"):
+            if st.button(f"{value} · {title}", key=f"focus_{lens}", type="primary" if st.session_state.overview_focus == lens else "secondary", width="stretch", help=explanation):
                 st.session_state.overview_focus = lens
                 st.rerun()
     st.caption(f'{len(assessments)} of {len(state["risks"])} risks have an RCSA submission. {outside} submitted assessment(s) are outside appetite; unassessed risks are not counted as within appetite.')
