@@ -44,6 +44,16 @@ class WorkbenchRules(unittest.TestCase):
         a.update(action="Improve exception review", action_owner="Index Operations Lead")
         self.assertTrue(approve_assessment(self.state, a))
 
+    def test_synthetic_baseline_is_internally_consistent(self):
+        assessments = self.state["assessments"]
+        self.assertEqual(len(assessments), 8)
+        self.assertEqual(sum(a["status"] == "Approved in demo" for a in assessments.values()), 7)
+        self.assertEqual(sum(a["residual_likelihood"] * a["residual_impact"] > self.state["risks"][rid]["appetite"] for rid, a in assessments.items()), 2)
+        for assessment in assessments.values():
+            if assessment["status"] == "Approved in demo":
+                self.assertTrue(approve_assessment(self.state, assessment), assessment["risk_id"])
+        self.assertFalse(approve_assessment(self.state, assessments["R06"]))
+
 
 if __name__ == "__main__":
     unittest.main()
