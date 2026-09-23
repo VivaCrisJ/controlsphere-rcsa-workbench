@@ -60,6 +60,20 @@ CONTROLS = [
 ]
 
 
+# Synthetic baseline judgments illustrate the management view. Evidence IDs are placeholders,
+# not files or claims that testing was performed. R06 deliberately remains a draft.
+ASSESSMENTS = [
+    ("R03", "Effective", 2, 3, "SYN-FEED-01", "Daily completeness checks reduce the likelihood of an undetected late feed; material outages remain possible.", "", "", "Approved in demo"),
+    ("R05", "Partially effective", 2, 4, "SYN-PRICE-02", "Threshold checks detect many anomalies, while unusual market movements still need manual challenge.", "", "", "Approved in demo"),
+    ("R06", "Not assessed", 2, 4, "", "", "", "", "Draft"),
+    ("R07", "Partially effective", 3, 4, "SYN-CA-03", "Recent exception review indicates that high-impact events can remain unresolved near cut-off.", "Calibrate event escalation thresholds and retest exception review", "Index Operations Lead", "Approved in demo"),
+    ("R09", "Effective", 2, 4, "SYN-CHANGE-04", "Ticket approval and peer review reduce the likelihood of an improper configuration release.", "", "", "Approved in demo"),
+    ("R10", "Partially effective", 3, 4, "SYN-CALC-05", "Sample recalculation can miss errors outside the selected population; monitoring needs broader coverage.", "Expand sample coverage and document independent review criteria", "Index Manager", "Approved in demo"),
+    ("R12", "Effective", 2, 3, "SYN-RELEASE-06", "A separate release gate retains an approval record even though one linked control needs a clearer evidence standard.", "", "", "Approved in demo"),
+    ("R13", "Effective", 2, 4, "SYN-DIST-07", "Checksum validation and release comparison reduce the risk of an incorrect client file.", "", "", "Approved in demo"),
+]
+
+
 def initial_state():
     recent_review = (date.today() - timedelta(days=30)).isoformat()
     stale_review = (date.today() - timedelta(days=700)).isoformat()
@@ -73,5 +87,11 @@ def initial_state():
                          "type": t, "mode": mode, "key": bool(rs and next(r[4] for r in RISKS if r[0] == rs[0]) >= 5),
                          "last_review": stale_review if i == "C19" else recent_review,
                          "status": "Active"} for i, p, rs, n, d, o, f, e, t, mode in CONTROLS},
-        "assessments": {}, "decisions": {}, "audit_log": [],
+        "assessments": {rid: {"risk_id": rid, "effectiveness": effectiveness,
+                              "residual_likelihood": likelihood, "residual_impact": impact,
+                              "evidence": evidence, "rationale": rationale, "action": action,
+                              "action_owner": action_owner, "notes": "Synthetic baseline case",
+                              "status": status}
+                        for rid, effectiveness, likelihood, impact, evidence, rationale, action, action_owner, status in ASSESSMENTS},
+        "decisions": {}, "audit_log": [],
     }
