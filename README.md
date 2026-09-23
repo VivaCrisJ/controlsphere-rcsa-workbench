@@ -13,6 +13,19 @@ streamlit run app.py
 
 Open the local address printed by Streamlit. The sample resets on app restart or when you press **Reset demonstration**. Edits are session-local and shared persistence is intentionally absent. Export the audit log before leaving if needed.
 
+## Online deployment configuration
+
+When deploying this repository with Streamlit Community Cloud, use:
+
+| Setting | Value |
+| --- | --- |
+| Repository | `VivaCrisJ/controlsphere-rcsa-workbench` |
+| Branch | `main` |
+| Main file | `app.py` |
+| Dependencies | `requirements.txt` at repository root |
+
+No secrets or private data are required. Deploy from your own Streamlit account at [share.streamlit.io](https://share.streamlit.io/), then open the generated app URL and check the Overview, Control Library, Rationalisation and RCSA pages. The public demo resets sample changes by session or app restart; do not enter real client evidence.
+
 ## What to inspect
 
 1. **Overview** highlights documentation gaps and risks with no active mapped controls.
