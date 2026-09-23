@@ -28,7 +28,7 @@ No secrets or private data are required. Deploy from your own Streamlit account 
 
 ## What to inspect
 
-1. **Overview** brings the framework, documentation, rationalisation, risk coverage and RCSA cycle into one management view. Select a measure and process to inspect its drivers, then open the relevant record in its workbench module.
+1. **Overview** brings the framework, documentation, rationalisation, risk coverage and RCSA cycle into one management view. Select a measure and process to inspect its drivers, then open the relevant record in its workbench module. The synthetic baseline includes eight RCSA submissions: seven illustrative approvals and one incomplete draft; two approved assessments are outside appetite.
 2. **Process → Risk → Control** links seven fictional processes to 14 risks and 24 curated controls. Risk `R14` has no linked control on purpose.
 3. **Control Library** shows an inspectable documentation score, objective, classification and last review. `C08` has a vague activity, no owner, frequency or evidence. Improve the record, explain the change and see the updated score and audit log. A separate lifecycle decision can change a control's status with a written rationale.
 4. **Rationalisation** flags identical activity descriptions (`C03` / `C04`, `C09` / `C10`), weak records, a stale inventory review and gaps. A proposed disposition needs a written reason; it never merges or retires controls automatically. Note that `C09` and `C10` have **different risk coverage**, despite identical text.
