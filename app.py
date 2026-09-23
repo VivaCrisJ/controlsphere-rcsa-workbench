@@ -21,9 +21,9 @@ st.markdown("""<style>
 </style>""", unsafe_allow_html=True)
 st.title("◉ ControlSphere")
 st.caption("A fictional benchmark operations workbench · control framework · rationalisation · RCSA")
-st.info("Synthetic portfolio demonstration. The rules are illustrative, not FTSE Russell / LSEG methods or a substitute for a control owner's judgment.")
+st.info("Synthetic portfolio demonstration. The rules are illustrative.")
 
-page = st.sidebar.radio("Explore", ["Overview", "Process → Risk → Control", "Control Library", "Rationalisation", "RCSA Workshop", "Governance & Audit Trail"])
+page = st.sidebar.radio("Explore", ["Overview", "Process → Risk → Control", "Control Library", "Rationalisation", "RCSA Workshop", "Governance & Audit Trail"], key="nav_page")
 actor = st.sidebar.text_input("Demo reviewer", "Portfolio reviewer", help="A label in the local audit trail, not authenticated identity.")
 st.sidebar.caption("Edits live in this browser session. Refreshing or restarting the app resets the sample; export before leaving.")
 if st.sidebar.button("Reset demonstration", type="secondary"):
@@ -49,28 +49,137 @@ def metrics():
     return controls, missing_owner, poor_docs, uncovered, outside
 
 
+def navigate_to(destination, **selection):
+    """A widget callback runs before the sidebar navigation widget is rendered."""
+    for key, value in selection.items():
+        st.session_state[key] = value
+    st.session_state.nav_page = destination
+
+
 if page == "Overview":
-    st.header("Framework at a glance")
+    st.header("Controls framework overview")
+    st.caption("Select a measure to see what is driving it, then follow the relevant record into the workbench.")
     controls, missing_owner, poor_docs, uncovered, outside = metrics()
-    a, b, c, d = st.columns(4)
-    a.metric("Active controls", sum(x["status"] == "Active" for x in controls))
-    b.metric("Documentation prompts", poor_docs)
-    c.metric("Risks without active controls", uncovered)
-    d.metric("RCSAs outside appetite", outside)
+    active = [c for c in controls if c["status"] == "Active"]
+    quality_flags = [(c, control_quality(c)[1]) for c in active if control_quality(c)[1]]
+    gaps = [r for r in state["risks"].values() if not active_controls(state, r["id"])]
+    rationalisation = [x for x in rationalisation_candidates(state) if x["kind"] in ("Potential duplicate", "Overdue review")]
+    assessments = state["assessments"]
+    lenses = [
+        ("inventory", "Active controls", str(len(active))),
+        ("quality", "Documentation gaps", str(len(quality_flags))),
+        ("rationalise", "Rationalisation signals", str(len(rationalisation))),
+        ("coverage", "Uncovered risks", str(len(gaps))),
+        ("rcsa", "RCSA completed", f'{len(assessments)}/{len(state["risks"])}'),
+    ]
+    if "overview_focus" not in st.session_state:
+        st.session_state.overview_focus = "inventory"
+    for col, (lens, title, value) in zip(st.columns(5), lenses):
+        with col:
+            if st.button(f"{value} · {title}", key=f"focus_{lens}", type="primary" if st.session_state.overview_focus == lens else "secondary", width="stretch"):
+                st.session_state.overview_focus = lens
+                st.rerun()
+    st.caption(f'{len(assessments)} of {len(state["risks"])} risks have an RCSA submission. {outside} submitted assessment(s) are outside appetite; unassessed risks are not counted as within appetite.')
+
+    st.subheader("Process posture")
+    posture = []
+    for process in state["processes"].values():
+        pid = process["id"]
+        scoped_controls = [c for c in active if c["process_id"] == pid]
+        scoped_risks = [r for r in state["risks"].values() if r["process_id"] == pid]
+        covered = sum(bool(active_controls(state, r["id"])) for r in scoped_risks)
+        posture.append({
+            "Process": process["name"], "Active controls": len(scoped_controls),
+            "Risks covered": f"{covered}/{len(scoped_risks)}",
+            "Records to improve": sum(bool(control_quality(c)[1]) for c in scoped_controls),
+            "RCSA submissions": f'{sum(r["id"] in assessments for r in scoped_risks)}/{len(scoped_risks)}',
+        })
+    st.dataframe(pd.DataFrame(posture), hide_index=True, width="stretch")
+    scope = st.selectbox("Focus on a process", ["All processes", *state["processes"]],
+                         format_func=lambda p: "All processes" if p == "All processes" else state["processes"][p]["name"],
+                         key="overview_process")
+    in_scope = lambda p: scope == "All processes" or p == scope
+    focus = st.session_state.overview_focus
+
+    with st.container(border=True):
+        if focus == "inventory":
+            selected = [c for c in active if in_scope(c["process_id"])]
+            st.subheader("Where the active controls sit")
+            if scope == "All processes":
+                counts = pd.DataFrame({"Process": [p["Process"] for p in posture], "Active controls": [p["Active controls"] for p in posture]}).set_index("Process")
+                st.bar_chart(counts, horizontal=True)
+            st.write(f'**{len(selected)} active controls** in this view · {sum(c["key"] for c in selected)} classified as key · {sum(c["mode"] == "Automated" for c in selected)} automated.')
+            if selected:
+                selected_id = st.selectbox("Choose a control to review", [c["id"] for c in selected], format_func=control_label, key="overview_control")
+                item = state["controls"][selected_id]
+                st.caption(f'{item["type"]} · {item["mode"]} · {len(item["risk_ids"])} linked risk(s) · owner: {item["owner"] or "Unassigned"}')
+                st.button("Open this control in the library", key="open_control", on_click=navigate_to,
+                          args=("Control Library",), kwargs={"selected_control": selected_id})
+        elif focus == "quality":
+            selected = [(c, reasons) for c, reasons in quality_flags if in_scope(c["process_id"])]
+            st.subheader("Documentation that needs attention")
+            if selected:
+                st.dataframe(pd.DataFrame([{"Control": c["id"], "Owner": c["owner"] or "Unassigned", "Prompts": len(reasons), "First prompt": reasons[0]} for c, reasons in selected]), hide_index=True, width="stretch")
+                selected_id = st.selectbox("Review a flagged record", [c["id"] for c, _ in selected], format_func=control_label, key="overview_quality")
+                for reason in next(reasons for c, reasons in selected if c["id"] == selected_id):
+                    st.caption(f"• {reason}")
+                st.button("Improve this control record", key="open_quality", on_click=navigate_to,
+                          args=("Control Library",), kwargs={"selected_control": selected_id})
+            else:
+                st.success("No automatic documentation prompts in this process. This does not establish operating effectiveness.")
+        elif focus == "rationalise":
+            selected = [x for x in rationalisation if in_scope(state["controls"][x["controls"].split(" + ")[0]]["process_id"])]
+            st.subheader("Candidates for human review")
+            if selected:
+                st.dataframe(pd.DataFrame([{"Candidate": x["controls"], "Signal": x["kind"], "Review question": x["reason"]} for x in selected]), hide_index=True, width="stretch")
+                st.caption("Identical descriptions can hide different risk coverage. A flag is a question for the owner, not a consolidation decision.")
+                st.button("Open rationalisation queue", key="open_rationalise", on_click=navigate_to,
+                          args=("Rationalisation",))
+            else:
+                st.success("No duplicate-text or overdue-review signals in this process.")
+        elif focus == "coverage":
+            selected = [r for r in gaps if in_scope(r["process_id"])]
+            st.subheader("Risks awaiting coverage confirmation")
+            if selected:
+                for risk in selected:
+                    process = state["processes"][risk["process_id"]]
+                    st.warning(f'{risk["id"]} · {risk["name"]} — {process["name"]}. No active control is mapped; verify actual coverage with the process owner.')
+                st.button("Explore process and risk links", key="open_mapping", on_click=navigate_to,
+                          args=("Process → Risk → Control",), kwargs={"selected_process": selected[0]["process_id"]})
+            else:
+                st.success("Every risk in this process has at least one active mapped control. Mapping does not prove that the control works.")
+        else:
+            scoped_risks = [r for r in state["risks"].values() if in_scope(r["process_id"])]
+            submitted = [r for r in scoped_risks if r["id"] in assessments]
+            st.subheader("RCSA cycle progress")
+            st.progress(len(submitted) / len(scoped_risks), text=f'{len(submitted)} of {len(scoped_risks)} risks assessed in this view')
+            outside_here = [r for r in submitted if risk_score(assessments[r["id"]]["residual_likelihood"], assessments[r["id"]]["residual_impact"]) > r["appetite"]]
+            st.write(f'**{len(outside_here)} outside appetite** among submitted assessments · **{len(scoped_risks) - len(submitted)} awaiting assessment**.')
+            if outside_here:
+                st.dataframe(pd.DataFrame([{"Risk": r["id"], "Residual": risk_score(assessments[r["id"]]["residual_likelihood"], assessments[r["id"]]["residual_impact"]), "Appetite": r["appetite"], "Status": assessments[r["id"]]["status"]} for r in outside_here]), hide_index=True, width="stretch")
+            pending = [r for r in scoped_risks if r["id"] not in assessments]
+            next_risk = (outside_here or pending or submitted)
+            if next_risk:
+                st.button("Open the next RCSA review", key="open_rcsa", on_click=navigate_to,
+                          args=("RCSA Workshop",), kwargs={"selected_risk": next_risk[0]["id"]})
+
     st.subheader("Management attention")
-    if uncovered:
-        st.warning(f"{uncovered} risk(s) have no linked active control. Validate the gap with the process owner before creating remediation.")
-    if missing_owner:
-        st.warning(f"{missing_owner} active control(s) have no named owner. Ownership needs clarification before reliance or attestation.")
-    if poor_docs:
-        st.write(f"{poor_docs} active control records triggered at least one documentation prompt. Review the queue for the specific reasons.")
-    st.caption("Counts update with in-session changes; no invented control effectiveness or incident trend is inferred from the sample.")
-    st.subheader("A walkthrough to try")
-    st.markdown("1. Explore **R14** in the mapping view: distribution outages have no linked control.  \n2. Inspect **C08** in the library and improve its documentation.  \n3. Review the **C03 + C04** duplicate candidate: their identical wording does not prove identical risk coverage.  \n4. Assess **R07** in the RCSA workshop and inspect the QA prompts.")
+    priorities = []
+    if gaps:
+        priorities.append(f'**Confirm coverage:** {", ".join(r["id"] for r in gaps)} has no active mapped control. Ask the process owner whether the gap is real.')
+    if quality_flags:
+        priorities.append(f'**Improve documentation:** {len(quality_flags)} active records have completeness prompts; {missing_owner} lack a named owner.')
+    if rationalisation:
+        priorities.append(f'**Challenge inventory quality:** {len(rationalisation)} duplicate-text or overdue-review signals need a documented disposition.')
+    if len(assessments) < len(state["risks"]):
+        priorities.append(f'**Complete assessments:** {len(state["risks"]) - len(assessments)} risks have no RCSA submission; the outside-appetite count is therefore incomplete.')
+    for item in priorities[:4]:
+        st.markdown(f"- {item}")
+    st.caption("This view derives from the current session's records and links. It does not infer incidents, test results or a production control opinion.")
 
 elif page == "Process → Risk → Control":
     st.header("Process → Risk → Control")
-    pid = st.selectbox("Business process", list(state["processes"]), format_func=lambda i: f'{i} · {state["processes"][i]["name"]}')
+    pid = st.selectbox("Business process", list(state["processes"]), format_func=lambda i: f'{i} · {state["processes"][i]["name"]}', key="selected_process")
     process = state["processes"][pid]
     st.caption(f'Owner area: {process["unit"]} · Fictional benchmark data workflow')
     for risk in (r for r in state["risks"].values() if r["process_id"] == pid):
@@ -93,7 +202,7 @@ elif page == "Control Library":
         rows.append({"ID": c["id"], "Name": c["name"], "Process": state["processes"][c["process_id"]]["name"], "Risks": ", ".join(c["risk_ids"]) or "—", "Owner": c["owner"] or "—", "Frequency": c["frequency"] or "—", "Score*": score, "Status": c["status"]})
     st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
     st.caption("* Documentation completeness prompt only. The score does not establish design or operating effectiveness.")
-    cid = st.selectbox("Inspect or improve a control", list(state["controls"]), format_func=control_label)
+    cid = st.selectbox("Inspect or improve a control", list(state["controls"]), format_func=control_label, key="selected_control")
     control = state["controls"][cid]
     score, findings = control_quality(control)
     st.subheader(f"{cid} · {control['name']}")
@@ -175,7 +284,7 @@ elif page == "Rationalisation":
 elif page == "RCSA Workshop":
     st.header("Illustrative RCSA Workshop")
     st.caption("Choose a risk, review inherent exposure and linked controls, then propose a residual rating. The residual score is a documented human assessment, never a direct arithmetic deduction from control quality.")
-    rid = st.selectbox("Risk in scope", list(state["risks"]), format_func=risk_label)
+    rid = st.selectbox("Risk in scope", list(state["risks"]), format_func=risk_label, key="selected_risk")
     risk = state["risks"][rid]
     linked = active_controls(state, rid)
     st.write(f'**Scope:** {state["processes"][risk["process_id"]]["name"]} · Sample period: 2026 Q3')
